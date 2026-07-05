@@ -365,32 +365,39 @@ function fitConnect(){
   });
 }
 
-async function ghData(dataType,startDate,endDate){
-  // Endpoint syntax per migration guide; tries dailyRollup first, then list.
-  const tries=[
-    GH_BASE+dataType+"/dataPoints:dailyRollup?startDate="+startDate+"&endDate="+endDate,
-    GH_BASE+dataType+"/dataPoints?startDate="+startDate+"&endDate="+endDate,
-    GH_BASE+dataType+"/dataPoints"
-  ];
-  let last=null;
-  for(const u of tries){
-    const r=await fetch(u,{headers:{Authorization:"Bearer "+S.fit.token}});
+/* Verified against the live v4 API (Jul 2026): the list endpoint returns
+   dataPoints newest-first (~50 = ~50 days); date filters aren't supported
+   as query params, so filtering happens client-side. */
+async function ghData(dataType){
+  try{
+    const r=await fetch(GH_BASE+dataType+"/dataPoints",{headers:{Authorization:"Bearer "+S.fit.token}});
     if(r.status===401){const f=S.fit;delete f.token;S.fit=f;throw new Error("authorization expired — tap Connect again");}
-    if(r.ok){const j=await r.json(); console.log("GH ok:",dataType,u,j); return j;}
-    last=r.status; console.warn("GH try failed:",u,r.status);
+    if(!r.ok){console.warn("GH",dataType,"status",r.status);return null;}
+    return (await r.json()).dataPoints||[];
+  }catch(e){
+    if(String(e).includes("authorization expired"))throw e;
+    console.warn("GH fetch failed:",dataType,e); return null;
   }
-  console.warn("GH no data for",dataType,"last status",last);
-  return null;
 }
+function ghDate(d){return d?`${d.year}-${String(d.month).padStart(2,"0")}-${String(d.day).padStart(2,"0")}`:null;}
+function ghLocalDay(iso,off){const t=new Date(new Date(iso).getTime()+parseInt(off||"0")*1000);return t.toISOString().slice(0,10);}
+function ghMean(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:null;}
 
-/* tolerant JSON walkers — the v4 response schema may vary by data type */
-function deepFind(o,keys,out=[]){
-  if(o&&typeof o==="object"){for(const k in o){
-    if(keys.includes(k)&&(typeof o[k]==="number"||typeof o[k]==="string"))out.push(o[k]);
-    deepFind(o[k],keys,out);}}
-  return out;
+function ghParseSleepPoint(p){
+  const s=p.sleep; if(!s||!s.interval)return null;
+  const day=ghLocalDay(s.interval.endTime,s.interval.endUtcOffset);
+  const durMin=(new Date(s.interval.endTime)-new Date(s.interval.startTime))/60000;
+  const st={DEEP:0,REM:0,LIGHT:0,AWAKE:0};
+  for(const g of (s.stages||[])){
+    const m=(new Date(g.endTime)-new Date(g.startTime))/60000;
+    if(st[g.type]!=null)st[g.type]+=m;
+  }
+  const asleep=Math.max(1,durMin-st.AWAKE);
+  return {day,durMin,asleep,
+    efficiency:Math.round(100*asleep/durMin),
+    deepPct:Math.round(100*st.DEEP/asleep),
+    remPct:Math.round(100*st.REM/asleep)};
 }
-function nums(o,keys,f){return deepFind(o,keys).map(x=>parseFloat(x)).filter(x=>!isNaN(x)&&(!f||f(x)));}
 
 async function fitPull(){
   const fit=S.fit;
@@ -398,41 +405,50 @@ async function fitPull(){
   const t=todayStr(), banner=document.getElementById("fitbitBanner");
   banner.innerHTML='<div class="info">Reading last night via Google Health…</div>';
   try{
-    const start30=todayStr(new Date(Date.now()-30*864e5));
-    const start7=todayStr(new Date(Date.now()-6*864e5));
-    const [sleep,hrv,rhr,temp,hrv30,rhr30,sleep7]=await Promise.all([
-      ghData("sleep",t,t),
-      ghData("daily-heart-rate-variability",t,t),
-      ghData("daily-resting-heart-rate",t,t),
-      ghData("daily-sleep-temperature-derivations",t,t),
-      ghData("daily-heart-rate-variability",start30,t),
-      ghData("daily-resting-heart-rate",start30,t),
-      ghData("sleep",start7,t)
+    const [sleepPts,hrvPts,rhrPts,tempPts]=await Promise.all([
+      ghData("sleep"),
+      ghData("daily-heart-rate-variability"),
+      ghData("daily-resting-heart-rate"),
+      ghData("daily-sleep-temperature-derivations")
     ]);
     const out={date:t};
-    if(sleep){
-      const mins=nums(sleep,["durationMillis","duration"],x=>x>3600000);
-      if(mins.length)out.sleepMins=Math.round(Math.max(...mins)/60000);
-      const eff=nums(sleep,["efficiency"],x=>x>0&&x<=100); if(eff.length)out.efficiency=eff[0];
-      const deep=nums(sleep,["deepMinutes"],x=>x>0), rem=nums(sleep,["remMinutes"],x=>x>0);
-      if(out.sleepMins&&deep.length)out.deepPct=Math.round(100*deep[0]/out.sleepMins);
-      if(out.sleepMins&&rem.length)out.remPct=Math.round(100*rem[0]/out.sleepMins);
+    if(sleepPts&&sleepPts.length){
+      const nights=sleepPts.map(ghParseSleepPoint).filter(Boolean);
+      const today=nights.filter(n=>n.day===t).sort((a,b)=>b.asleep-a.asleep)[0];
+      if(today){out.sleepMins=Math.round(today.asleep); out.efficiency=today.efficiency;
+        out.deepPct=today.deepPct; out.remPct=today.remPct;}
+      const byDay={};
+      for(const n of nights){if(!byDay[n.day]||n.asleep>byDay[n.day])byDay[n.day]=n.asleep;}
+      const last7=Object.keys(byDay).sort().slice(-7).map(d=>byDay[d]);
+      if(last7.length>=4)out.sleepDebtH=Math.max(0,(last7.length*7.5*60-last7.reduce((a,b)=>a+b,0))/60);
     }
-    if(hrv){const v=nums(hrv,["dailyRmssd","rmssd"],x=>x>0&&x<300); if(v.length)out.hrv=v[v.length-1];}
-    if(rhr){const v=nums(rhr,["restingHeartRate","bpm"],x=>x>30&&x<130); if(v.length)out.rhr=v[v.length-1];}
-    if(temp){const v=nums(temp,["nightlyRelative","delta"],x=>Math.abs(x)<5); if(v.length)out.tempDelta=v[v.length-1];}
-    if(hrv30){const v=nums(hrv30,["dailyRmssd","rmssd"],x=>x>0&&x<300); if(v.length>3)out.hrvBase=v.reduce((a,b)=>a+b,0)/v.length;}
-    if(rhr30){const v=nums(rhr30,["restingHeartRate","bpm"],x=>x>30&&x<130); if(v.length>3)out.rhrBase=v.reduce((a,b)=>a+b,0)/v.length;}
-    if(sleep7){const m=nums(sleep7,["durationMillis","duration"],x=>x>3600000).map(x=>x/60000);
-      if(m.length)out.sleepDebtH=Math.max(0,(m.length*7.5*60-m.reduce((a,b)=>a+b,0))/60);}
+    if(hrvPts&&hrvPts.length){
+      const vals=hrvPts.map(p=>p.dailyHeartRateVariability).filter(Boolean);
+      const today=vals.find(v=>ghDate(v.date)===t);
+      if(today)out.hrv=today.averageHeartRateVariabilityMilliseconds;
+      const all=vals.map(v=>v.averageHeartRateVariabilityMilliseconds).filter(x=>x>0);
+      if(all.length>3)out.hrvBase=ghMean(all);
+    }
+    if(rhrPts&&rhrPts.length){
+      const vals=rhrPts.map(p=>p.dailyRestingHeartRate).filter(Boolean);
+      const today=vals.find(v=>ghDate(v.date)===t);
+      if(today)out.rhr=parseFloat(today.beatsPerMinute);
+      const all=vals.map(v=>parseFloat(v.beatsPerMinute)).filter(x=>x>30&&x<130);
+      if(all.length>3)out.rhrBase=ghMean(all);
+    }
+    if(tempPts&&tempPts.length){
+      const today=tempPts.map(p=>p.dailySleepTemperatureDerivations).filter(Boolean)
+        .find(v=>ghDate(v.date)===t);
+      if(today&&today.nightlyTemperatureCelsius!=null&&today.baselineTemperatureCelsius!=null)
+        out.tempDelta=today.nightlyTemperatureCelsius-today.baselineTemperatureCelsius;
+    }
     fit.last=out; S.fit=fit;
     if(Object.keys(out).length>1) applySuggestion(out);
-    else banner.innerHTML='<div class="warn">Connected, but no overnight data came back. Check the Fitbit app has synced, then tap Re-check → Connect again. If it persists, the response format may need one parser tweak (browser console has details).</div>';
+    else banner.innerHTML='<div class="warn">Connected, but no overnight data came back. Check the Fitbit app has synced, then reload this page. If it persists, the browser console (F12) has details.</div>';
   }catch(e){
     banner.innerHTML=`<div class="warn">Google Health: ${esc(String(e.message||e))}. Manual check works as always.</div>`;
   }
 }
-
 function applySuggestion(d){
   // Map biometrics → suggested Energy / Emotion / EF hint (Manual §1.1, Direction A)
   let energy=null, emotion=null, efHint=null, reasons=[];
