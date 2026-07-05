@@ -475,9 +475,10 @@ function applySuggestion(d){
     if(pre[f]==null)continue;
     const g=document.querySelector(`.chips[data-f=${f}]`);
     const c=g.querySelector(`.chip[data-v="${pre[f]}"]`);
-    if(c&&sel[f]===undefined){c.classList.add("sug");}
-    document.getElementById("h_"+f).textContent="suggested";
+    if(c&&sel[f]===undefined){c.classList.add("sug","sel"); sel[f]=pre[f];}
+    document.getElementById("h_"+f).textContent="from Fitbit \u2014 tap to change";
   }
+  document.getElementById("saveBtn").disabled = FIELDS.some(x=>sel[x]===undefined);
   let warn="";
   if(d.tempDelta>=0.4&&rhrUp>=4&&hrvDown>0.1) warn=`<div class="warn">Skin temp up, RHR up, HRV down — the pre-illness/inflammation triad. The next 24–48h may be costlier than they feel.</div>`;
   if(d.sleepDebtH>=2) warn+=`<div class="warn">~${d.sleepDebtH.toFixed(1)}h sleep debt over 7 nights. Expect capacity to run below felt sense.</div>`;
