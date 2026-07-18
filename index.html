@@ -69,6 +69,12 @@
   .ovr{padding:7px 10px; border-radius:10px; font-size:12.5px; border:1px solid var(--line);
     background:var(--card2); color:var(--dim); cursor:pointer;}
   .ovr.sel{color:#0e1015; font-weight:700;}
+  .drainhead{display:flex;justify-content:space-between;align-items:center;}
+  .drainbar{height:12px;border-radius:6px;background:var(--card2);border:1px solid var(--line);overflow:hidden;margin:8px 0 4px;}
+  .drainbar>div{height:100%;transition:width .3s;}
+  .hourstrip{display:flex;gap:3px;margin-top:8px;}
+  .hourcell{flex:1;height:16px;border-radius:4px;background:var(--card2);border:1px solid var(--line);}
+  .syncbtn{background:none;border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:4px 9px;font-size:12px;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -83,6 +89,7 @@
 
   <div id="fitbitBanner"></div>
   <div id="patternBox"></div>
+  <div id="drainCard"></div>
 
   <!-- CHECK PANEL -->
   <div class="card" id="checkCard">
@@ -187,6 +194,7 @@ const TYPES={
     protocol:["Sensory reduction — low light, low sound.","Pressure or weighted support.","Heat or cold, depending on pain.","Hydration.","Cease all tasks. Minimal communication."]}
 };
 const LOW=["blue","gray","red"];
+const DRAIN_BUDGETS={green:500,yellow:350,blue:250,gray:150,red:80};
 
 /* ---------- storage ---------- */
 const S={
@@ -323,6 +331,7 @@ function render(conflictNote){
     if(lows>=4) pb.innerHTML=`<div class="warn"><b>${lows} of the last 7 days were low-capacity.</b> Possible accumulating debt — the manual suggests protecting sleep and dropping optional commitments this week.</div>`;
   }
 
+  renderDrain();
   renderFitbitBanner();
 }
 
@@ -358,6 +367,7 @@ function fitConnect(){
           const f=S.fit; f.token=resp.access_token;
           f.expires=Date.now()+((+resp.expires_in||3600)-60)*1000; f.granted=true; S.fit=f;
           fitPull();
+          drainSync(true);
         }
       }
     });
@@ -475,10 +485,9 @@ function applySuggestion(d){
     if(pre[f]==null)continue;
     const g=document.querySelector(`.chips[data-f=${f}]`);
     const c=g.querySelector(`.chip[data-v="${pre[f]}"]`);
-    if(c&&sel[f]===undefined){c.classList.add("sug","sel"); sel[f]=pre[f];}
-    document.getElementById("h_"+f).textContent="from Fitbit \u2014 tap to change";
+    if(c&&sel[f]===undefined){c.classList.add("sug");}
+    document.getElementById("h_"+f).textContent="suggested";
   }
-  document.getElementById("saveBtn").disabled = FIELDS.some(x=>sel[x]===undefined);
   let warn="";
   if(d.tempDelta>=0.4&&rhrUp>=4&&hrvDown>0.1) warn=`<div class="warn">Skin temp up, RHR up, HRV down — the pre-illness/inflammation triad. The next 24–48h may be costlier than they feel.</div>`;
   if(d.sleepDebtH>=2) warn+=`<div class="warn">~${d.sleepDebtH.toFixed(1)}h sleep debt over 7 nights. Expect capacity to run below felt sense.</div>`;
@@ -501,6 +510,129 @@ function renderFitbitBanner(){
       :'Fitbit via Google Health not connected yet. <a href="#" onclick="fitConnect();return false;">Connect</a>'}</div>`;
 }
 
+/* ============ INTRADAY DRAIN — day budget ============
+   Same Google Health v4 stream, data type "heart-rate": 2–3s samples,
+   newest-first, pageSize up to 1000, nextPageToken pagination
+   (verified against the live API, Jul 2026).
+   Each minute above resting HR drains a budget sized by today's Day Type:
+   +12–24 bpm = 1 pt/min · +25–39 = 2 · +40 or more = 4.
+   Budgets are defaults — calibrate in Settings after a few days of data. */
+const I={
+  get d(){return JSON.parse(localStorage.getItem("nls_intra")||"{}");},
+  set d(v){localStorage.setItem("nls_intra",JSON.stringify(v));}
+};
+function drainBudget(){
+  const today=S.entries.find(e=>e.date===todayStr());
+  const t=today?(today.override||today.dayType):null;
+  const b=Object.assign({},DRAIN_BUDGETS,S.cfg.budgets||{});
+  return {type:t,budget:b[t||"yellow"],assumed:!t};
+}
+function drainBaseline(intra){
+  const f=S.fit.last||{};
+  if(f.rhr)return f.rhr;
+  if(f.rhrBase)return f.rhrBase;
+  const vals=Object.values(intra.min||{}).sort((a,b)=>a-b);
+  if(vals.length>30)return vals[Math.floor(vals.length*0.1)]+2;
+  return null;
+}
+function drainPts(diff){return diff>=40?4:diff>=25?2:diff>=12?1:0;}
+function drainSpent(intra){
+  const rhr=drainBaseline(intra);
+  if(rhr==null)return null;
+  let pts=0;const hours={};
+  for(const mi in intra.min){
+    const p=drainPts(intra.min[mi]-rhr);
+    pts+=p;
+    const h=Math.floor(mi/60);
+    if(p>(hours[h]||0))hours[h]=p;
+  }
+  return {pts,rhr,hours};
+}
+async function drainSync(auto){
+  const fit=S.fit;
+  if(!fit.token||Date.now()>(fit.expires||0)){
+    if(auto){renderDrain();}else{fitConnect();}
+    return;
+  }
+  const t=todayStr();
+  let intra=I.d;
+  if(intra.date!==t)intra={date:t,min:{},lastTs:0};
+  renderDrain("Reading today's heart rate…");
+  try{
+    let pageToken=null,pages=0,done=false,maxTs=intra.lastTs||0;
+    const agg={};
+    while(!done&&pages<30){
+      const u=GH_BASE+"heart-rate/dataPoints?pageSize=1000"+(pageToken?"&pageToken="+encodeURIComponent(pageToken):"");
+      const r=await fetch(u,{headers:{Authorization:"Bearer "+fit.token}});
+      if(r.status===401){const f2=S.fit;delete f2.token;S.fit=f2;throw new Error("authorization expired — tap Connect & sync");}
+      if(!r.ok)throw new Error("heart-rate read failed ("+r.status+")");
+      const j=await r.json();
+      for(const p of (j.dataPoints||[])){
+        const h=p.heartRate;if(!h||!h.sampleTime)continue;
+        const ct=h.sampleTime.civilTime||{};
+        const cd=ct.date;if(!cd)continue;
+        const ds=cd.year+"-"+String(cd.month).padStart(2,"0")+"-"+String(cd.day).padStart(2,"0");
+        const ts=new Date(h.sampleTime.physicalTime).getTime();
+        if(ds!==t||ts<=(intra.lastTs||0)){done=true;continue;}
+        if(ts>maxTs)maxTs=ts;
+        const tm=ct.time||{};
+        const mi=(tm.hours||0)*60+(tm.minutes||0);
+        (agg[mi]=agg[mi]||[]).push(+h.beatsPerMinute);
+      }
+      pageToken=j.nextPageToken;
+      if(!pageToken)done=true;
+      pages++;
+    }
+    for(const mi in agg){
+      const a=agg[mi],avg=Math.round(a.reduce((x,y)=>x+y,0)/a.length);
+      intra.min[mi]=intra.min[mi]?Math.round((intra.min[mi]+avg)/2):avg;
+    }
+    intra.lastTs=maxTs;
+    intra.synced=Date.now();
+    intra.partial=pages>=30;
+    I.d=intra;
+  }catch(e){
+    renderDrain(null,String(e.message||e));
+    return;
+  }
+  renderDrain();
+}
+function renderDrain(busyMsg,errMsg){
+  const el=document.getElementById("drainCard");if(!el)return;
+  const fit=S.fit;
+  if(!fit.granted){el.innerHTML="";return;}
+  const intra=I.d;
+  const bd=drainBudget();
+  const sp=(intra.date===todayStr())?drainSpent(intra):null;
+  const tok=!!fit.token&&Date.now()<(fit.expires||0);
+  let inner='<div class="drainhead"><span class="label" style="margin:0"><span>Today’s drain</span></span><button class="syncbtn" onclick="drainSync(false)">'+(tok?"Sync":"Connect & sync")+'</button></div>';
+  if(busyMsg){
+    inner+='<div class="small">'+esc(busyMsg)+'</div>';
+  }else if(errMsg){
+    inner+='<div class="warn">'+esc(errMsg)+'</div>';
+  }else if(!sp){
+    inner+='<div class="small">'+(tok?"No heart-rate read yet today — tap Sync.":"Google session expired (they last ~1h). Tap Connect & sync — usually a one-tap popup.")+'</div>';
+  }else{
+    const pct=Math.round(100*sp.pts/bd.budget);
+    const col=pct<60?"var(--green)":pct<85?"var(--yellow)":"var(--red)";
+    inner+='<div class="drainbar"><div style="width:'+Math.min(100,pct)+'%;background:'+col+'"></div></div>';
+    inner+='<div class="small"><b>'+sp.pts+'</b> of '+bd.budget+' pts ('+pct+'%)'+(bd.type?" · "+bd.type[0].toUpperCase()+bd.type.slice(1)+" budget":"")+(bd.assumed?" · no check yet — assuming Yellow":"")+' · resting '+Math.round(sp.rhr)+' bpm</div>';
+    let cells="";
+    for(let h=5;h<=22;h++){
+      const p=sp.hours[h]||0;
+      const c=p>=4?"var(--red)":p>=2?"var(--yellow)":p>=1?"var(--accent)":"var(--card2)";
+      cells+='<div class="hourcell" style="background:'+c+'" title="'+h+':00"></div>';
+    }
+    inner+='<div class="hourstrip">'+cells+'</div>';
+    const nowH=new Date().getHours();
+    if(pct>=100)inner+='<div class="warn">Budget spent. Downshift: treat the rest of today one level more constrained, and let the floor be enough.</div>';
+    else if(pct>=70&&nowH<15)inner+='<div class="warn">'+pct+'% of today’s budget gone before mid-afternoon. A 60-second re-check might change today’s rules.</div>';
+    if(intra.partial)inner+='<div class="small">Long gap since last sync — earliest hours may be missing.</div>';
+    if(intra.synced)inner+='<div class="small" style="margin-top:6px">Synced '+new Date(intra.synced).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+' · drain is information, not a verdict — your judgment is final.</div>';
+  }
+  el.innerHTML='<div class="card">'+inner+'</div>';
+}
+
 /* ---------- settings ---------- */
 function openSettings(){
   const cfg=S.cfg, fit=S.fit;
@@ -518,6 +650,11 @@ function openSettings(){
     h+=`<div class="set-label" style="margin:8px 0 2px; color:${TYPES[k].hex}">${k[0].toUpperCase()+k.slice(1)}</div>
     <input type="text" data-floor="${k}" value="${esc(floors[k]||TYPES[k].floorDefault)}">`;
   }
+  h+='<div class="set-label" style="margin-top:16px">Day budget (drain points) — per day type</div><div class="row" style="gap:6px">';
+  for(const k of ["green","yellow","blue","gray","red"]){
+    h+='<div style="flex:1"><div class="set-label" style="margin:6px 0 2px; color:'+TYPES[k].hex+'">'+k[0].toUpperCase()+k.slice(1)+'</div><input type="text" inputmode="numeric" data-budget="'+k+'" value="'+((cfg.budgets&&cfg.budgets[k])||DRAIN_BUDGETS[k])+'"></div>';
+  }
+  h+='</div><div class="small">Drain: each minute 12+ bpm over resting = 1 pt · 25+ = 2 · 40+ = 4. Defaults are guesses — after a few days, set each budget to what a sustainable day of that color actually costs.</div>';
   h+=`<div class="set-label">Custom protocol lines (optional, one per line — replaces defaults)</div>`;
   for(const k of ["gray","red"]){
     h+=`<div class="set-label" style="margin:8px 0 2px; color:${TYPES[k].hex}">${k[0].toUpperCase()+k.slice(1)}</div>
@@ -542,6 +679,7 @@ function saveCid(){const c=S.cfg;c.clientId=document.getElementById("cid").value
 function saveSettings(){
   const c=S.cfg; c.clientId=document.getElementById("cid").value.trim();
   c.floors={}; document.querySelectorAll("[data-floor]").forEach(i=>c.floors[i.dataset.floor]=i.value);
+  c.budgets={}; document.querySelectorAll("[data-budget]").forEach(function(i){var v=parseInt(i.value,10); if(v>0)c.budgets[i.dataset.budget]=v;});
   c.protocols={}; document.querySelectorAll("[data-prot]").forEach(i=>{if(i.value.trim())c.protocols[i.dataset.prot]=i.value;});
   S.cfg=c; document.getElementById("settingsModal").classList.remove("open"); render();
 }
@@ -566,6 +704,7 @@ function wipeToday(){
 }
 
 render();
+if(S.fit.granted&&S.fit.token&&Date.now()<(S.fit.expires||0)&&(!I.d.synced||Date.now()-I.d.synced>15*60*1000))drainSync(true);
 </script>
 </body>
 </html>
