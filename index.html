@@ -9,7 +9,7 @@
   :root{
     --bg:#14161a; --card:#1d2026; --card2:#23262e; --line:#2e323b;
     --text:#e8eaee; --dim:#9aa1ad; --faint:#6b7280;
-    --green:#4ade80; --yellow:#facc15; --blue:#60a5fa; --gray:#cbd5e1; --red:#f87171;
+    --green:#4ade80; --yellow:#facc15; --red:#f87171;
     --accent:#8b9cf5;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -110,9 +110,9 @@
       <div class="chip" data-v="0">Regulated</div><div class="chip" data-v="1">Strained</div><div class="chip" data-v="2">Overwhelmed</div>
     </div>
     <div class="label"><span>Executive function</span><span class="hint" id="h_ef"></span></div>
-    <div class="hint" style="margin-bottom:6px">“Can I sequence the next three steps of something without writing them down?”</div>
+    <div class="hint" style="margin-bottom:6px">&ldquo;Can I sequence the next three steps of something without writing them down?&rdquo;</div>
     <div class="chips" data-f="ef">
-      <div class="chip" data-v="0">Yes · Good</div><div class="chip" data-v="1">Uncertain · Fragmented</div><div class="chip" data-v="2">No · Minimal</div>
+      <div class="chip" data-v="0">Yes &middot; Good</div><div class="chip" data-v="1">Uncertain &middot; Fragmented</div><div class="chip" data-v="2">No &middot; Minimal</div>
     </div>
     <button class="bigbtn" id="saveBtn" disabled onclick="saveCheck()">Save check</button>
   </div>
@@ -133,7 +133,7 @@
 
   <div class="small" style="text-align:center; margin-top:16px;">
     Your data lives only on this device. Nothing is uploaded anywhere.<br>
-    Built from the NLS Manual · you can always override the Day Type.
+    Built from the NLS Manual &middot; you can always override the Day Type.
   </div>
 </div>
 
@@ -141,13 +141,13 @@
 <div class="modal" id="resetModal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="sheet">
     <h3>Quick sensory reset</h3>
-    <div class="small">Pick <b>one</b>. 10–60 seconds. Stop if discomfort increases. Not for Red days — on Red, go to the Red protocol instead.</div>
-    <div class="opt"><b>A · Pressure</b>Cross arms, firm pressure on upper arms or shoulders — or press palms together. Hold 10–30s.</div>
-    <div class="opt"><b>B · Visual reduction</b>Close eyes, lower gaze to a neutral surface, or turn away from stimulation. 10–30s.</div>
-    <div class="opt"><b>C · Auditory dampening</b>Cover ears lightly, hum softly on a long exhale, or press tongue to roof of mouth. 15–45s.</div>
-    <div class="opt"><b>D · Breath anchor</b>Inhale normally, exhale slowly 6–8s. Repeat 1–3 times only.</div>
-    <div class="opt"><b>E · Micro-relocation</b>One step away from the stimulus, turn 90°, or sit if standing / stand if sitting. Pause 10–30s.</div>
-    <div class="small">After one reset, reassess. Better → stop. Not better → one more attempt, then drop to a lower Day Type protocol.</div>
+    <div class="small">Pick <b>one</b>. 10&ndash;60 seconds. Stop if discomfort increases. Not for Red days &mdash; on Red, go to the Red protocol instead.</div>
+    <div class="opt"><b>A &middot; Pressure</b>Cross arms, firm pressure on upper arms or shoulders &mdash; or press palms together. Hold 10&ndash;30s.</div>
+    <div class="opt"><b>B &middot; Visual reduction</b>Close eyes, lower gaze to a neutral surface, or turn away from stimulation. 10&ndash;30s.</div>
+    <div class="opt"><b>C &middot; Auditory dampening</b>Cover ears lightly, hum softly on a long exhale, or press tongue to roof of mouth. 15&ndash;45s.</div>
+    <div class="opt"><b>D &middot; Breath anchor</b>Inhale normally, exhale slowly 6&ndash;8s. Repeat 1&ndash;3 times only.</div>
+    <div class="opt"><b>E &middot; Micro-relocation</b>One step away from the stimulus, turn 90&deg;, or sit if standing / stand if sitting. Pause 10&ndash;30s.</div>
+    <div class="small">After one reset, reassess. Better &rarr; stop. Not better &rarr; one more attempt, then drop to a lower Day Type protocol.</div>
   </div>
 </div>
 
@@ -159,42 +159,36 @@
 <script>
 /* ============ NLS Capacity — single-file app ============
    Model source: Cassi's NLS Manual, Layer 1.
-   NOTE: Manual §1.4 (Day Type Decision Logic) was never written.
-   The dayType() function below is derived from §1.3 conditions:
-   worst constraint governs; Red on overwhelm or pain+sensory both high;
-   Blue vs Gray split on Energy ("wired but stuck" vs "heavy and stuck").
-   Tune freely — it's your model. */
+   v2 (2026-08-09): 3-level Day Type scale — Green / Yellow / Red —
+   plus an optional "flavor" tag on hard days (fog / mood / pain / sensory).
+   Old Blue -> Yellow+fog, old Gray -> Red+fog (auto-migrated on load).
+   Also new: "Copy sync line for Claude" (paste into the NLS Review Hub
+   inbox in Notion each morning), and the sync line now carries yesterday's
+   final drain so calibration rows log themselves daily. */
 
 const FIELDS=["energy","pain","sensory","emotion","ef"];
 const TYPES={
   green:{name:"Green — High Capacity", color:"var(--green)", hex:"#4ade80",
-    perm:"Full capacity. Structured work, complex tasks, new things, project progression — all available.",
+    perm:"Go. Full capacity. Structured work, complex tasks, new things, project progression — all available.",
     floorDefault:"No floor needed today — but pacing is the constraint.",
     guide:["Work in 45–60 min blocks, deliberate transitions between them.","Avoid overscheduling — Green tips into Yellow when pushed.","Good day for anything from the ‘capacity-building’ list (exercise, sleep investment) — optional, never required."],
     protocol:["Brief pause between task blocks to maintain stability.","Enforce pacing to avoid overload.","Plan transitions deliberately."]},
   yellow:{name:"Yellow — Moderate Capacity", color:"var(--yellow)", hex:"#facc15",
-    perm:"Basic tasks, routine maintenance, admin, short clear actions. That is a full day — not a lesser one.",
+    perm:"Pace. Basic tasks, routine maintenance, admin, short clear actions. That is a full day — not a lesser one.",
     floorDefault:"The anchor task, done small.",
-    guide:["Work in 20–30 min blocks.","Avoid high-cost tasks and heavy sensory environments.","Keep the workload simple and predictable."],
+    guide:["Work in 20–30 min blocks.","Avoid high-cost tasks and heavy sensory environments.","Keep the workload simple and predictable.","With fog flavor: sequencing is offline — one externally-written step at a time, no planning, no multi-step decisions."],
     protocol:["10–20 min stabilization after each task or environmental exposure.","Limit tasks to routine actions.","Maintain predictability."]},
-  blue:{name:"Blue — Guided Capacity", color:"var(--blue)", hex:"#60a5fa",
-    perm:"You have energy but sequencing is offline. Action is possible — one externally-guided step at a time.",
-    floorDefault:"One externally-sequenced step.",
-    guide:["10–15 min blocks. Identify only the next action.","Externalize steps — write them down or have them handed to you.","No planning. No multi-step tasks. No decisions beyond the next action.","Physical / procedural tasks work well if the steps are provided."],
-    protocol:["Identify only the next action.","Externalize steps visually.","Maintain physical rhythm.","Reassess after each 5–15 min guided sequence."]},
-  gray:{name:"Gray — Activation Capacity", color:"var(--gray)", hex:"#cbd5e1",
-    perm:"Starting is the hard part today. Only the smallest possible actions are accessible — and they count.",
+  red:{name:"Red — Stop / Recovery", color:"var(--red)", hex:"#f87171",
+    perm:"Stop. Essentials only. If starting feels possible, the smallest actions count — and they're enough. If not, rest is the task, and existing is enough.",
     floorDefault:"Water. Meds. Food if possible. That counts.",
-    guide:["2–5 min blocks at most. Conserve energy.","No structured tasks, no cognitive tasks, limit social load.","Use an activation move to start anything at all:"],
-    protocol:["Drink water.","Change posture or room.","10-second stretch.","One simple physical action (pick up one item, open one tab)."]},
-  red:{name:"Red — Recovery Capacity", color:"var(--red)", hex:"#f87171",
-    perm:"No tasks. No planning. Rest and regulation only. Existing is the task today, and it's enough.",
-    floorDefault:"Existing. Rest is the task.",
-    guide:["High sensory protection. Minimal communication.","Recovery cycles of 15–60 minutes, repeated as needed."],
-    protocol:["Sensory reduction — low light, low sound.","Pressure or weighted support.","Heat or cold, depending on pain.","Hydration.","Cease all tasks. Minimal communication."]}
+    guide:["2–5 min blocks at most, or none. Conserve energy.","No structured tasks, no cognitive tasks, limit social load.","High sensory protection. Minimal communication.","If starting anything, use an activation move first:"],
+    protocol:["Drink water.","Change posture or room.","10-second stretch.","One simple physical action (pick up one item, open one tab).","If nothing is startable: sensory reduction, pressure or weighted support, heat or cold, hydration. Recovery cycles of 15–60 min."]}
 };
-const LOW=["blue","gray","red"];
-const DRAIN_BUDGETS={green:500,yellow:350,blue:250,gray:150,red:80};
+const FLAVORS={fog:"fog — sequencing/EF", mood:"mood — emotional load", pain:"pain", sensory:"sensory"};
+const LOW=["red"];
+const LEGACY={blue:"yellow",gray:"red"};
+function norm(t){return LEGACY[t]||t;}
+const DRAIN_BUDGETS={green:500,yellow:900,red:600}; /* seeded from calibration log, Aug 2026 — refine in Settings */
 
 /* ---------- storage ---------- */
 const S={
@@ -207,15 +201,30 @@ const S={
 };
 function todayStr(d=new Date()){return d.toLocaleDateString("en-CA");}
 
-/* ---------- day type logic (derived — see note above) ---------- */
+/* one-time migration of stored entries to the 3-level scale */
+(function migrate(){
+  const es=S.entries; let changed=false;
+  for(const e of es){
+    if(LEGACY[e.dayType]){e.legacyType=e.dayType; e.dayType=LEGACY[e.dayType]; if(!e.flavor)e.flavor="fog"; changed=true;}
+    if(e.override&&LEGACY[e.override]){e.override=LEGACY[e.override]; changed=true;}
+  }
+  if(changed)S.entries=es;
+})();
+
+/* ---------- day type logic (3-level, per Manual §1.3 as revised 2026-08-09) ---------- */
 function dayType(v){
-  if(v.emotion===2 || (v.pain===2 && v.sensory===2)) return "red";
-  if(v.ef===2 && v.energy===0) return "gray";
-  if(v.ef===2 && v.energy>=1) return "blue";
-  if(v.ef===1 && v.energy>=1 && v.sensory===2) return "blue";
-  if(v.energy===0 && v.ef>=1) return "gray";
+  if(v.emotion===2 || (v.pain===2 && v.sensory===2) || (v.energy===0 && v.ef>=1)) return "red";
   if(v.ef===0 && v.emotion===0 && v.energy>=1 && v.pain<=1 && v.sensory<=1) return "green";
   return "yellow";
+}
+function suggestFlavor(v,dt){
+  if(dt==="green")return null;
+  if(v.ef===2)return "fog";
+  if(v.sensory===2)return "sensory";
+  if(v.pain===2)return "pain";
+  if(v.emotion>=1)return "mood";
+  if(v.ef===1)return "fog";
+  return null;
 }
 
 /* ---------- check panel ---------- */
@@ -235,15 +244,14 @@ function saveCheck(){
   let dt=dayType(values);
   let conflictNote=null;
   // Conflict rule §1.2: data more constrained than felt sense → warn (early-warning), user decides.
-  if(suggestion && suggestion.constrainedHint && !LOW.includes(dt) && dt!=="yellow"){
+  if(suggestion && suggestion.constrainedHint && dt==="green"){
     conflictNote="Your Fitbit data reads more constrained than your answers. Manual rule: treat it as an early warning — consider one level more constrained until a mid-day re-check.";
   }
   const entries=S.entries.filter(e=>!(e.date===todayStr() && editingRecheck===false && e.recheck));
   const existing=entries.findIndex(e=>e.date===todayStr());
   const entry={date:todayStr(), time:new Date().toTimeString().slice(0,5), values, dayType:dt,
-    override:null, recheck:editingRecheck, fitbit:suggestion?suggestion.summary:null};
-  if(existing>=0 && editingRecheck){ entries[existing]=entry; }
-  else if(existing>=0){ entries[existing]=entry; }
+    flavor:suggestFlavor(values,dt), override:null, recheck:editingRecheck, fitbit:suggestion?suggestion.summary:null};
+  if(existing>=0){ entries[existing]=entry; }
   else entries.push(entry);
   S.entries=entries;
   editingRecheck=false;
@@ -253,6 +261,10 @@ function saveCheck(){
 function overrideType(t){
   const entries=S.entries; const i=entries.findIndex(e=>e.date===todayStr());
   if(i<0)return; entries[i].override=t; S.entries=entries; render();
+}
+function setFlavor(f){
+  const entries=S.entries; const i=entries.findIndex(e=>e.date===todayStr());
+  if(i<0)return; entries[i].flavor=(entries[i].flavor===f?null:f); S.entries=entries; render();
 }
 
 function startRecheck(){
@@ -278,22 +290,29 @@ function render(conflictNote){
 
   if(today){
     check.style.display="none";
-    const t=today.override||today.dayType;
+    const t=norm(today.override||today.dayType);
     const T=TYPES[t];
     const floor=(cfg.floors&&cfg.floors[t])||T.floorDefault;
     const prot=(cfg.protocols&&cfg.protocols[t])?cfg.protocols[t].split("\n").filter(x=>x.trim()):T.protocol;
     let h=`<div class="result" style="border-color:${T.hex}55; background:linear-gradient(180deg, ${T.hex}14, var(--card))">
       <h2 style="color:${T.hex}">${esc(T.name)}</h2>
-      <div class="small">Checked at ${esc(today.time)}${today.recheck?" · re-check":""}${today.override?" · overridden by you":""}${today.fitbit?" · Fitbit-assisted":""}</div>
+      <div class="small">Checked at ${esc(today.time)}${today.recheck?" · re-check":""}${today.override?" · overridden by you":""}${today.flavor?" · flavor: "+esc(today.flavor):""}${today.fitbit?" · Fitbit-assisted":""}</div>
       <div class="perm">${esc(T.perm)}</div>
       <div class="floor"><b>Minimum that counts today:</b><br>${esc(floor)}</div>
       <div class="sect">Today's rules</div><ul>${T.guide.map(g=>`<li>${esc(g)}</li>`).join("")}</ul>
-      <div class="sect">${t==="gray"?"Activation moves":t==="red"?"Recovery protocol":"Protocol"}</div>
+      <div class="sect">${t==="red"?"Activation & recovery":"Protocol"}</div>
       <ul>${prot.map(p=>`<li>${esc(p)}</li>`).join("")}</ul>`;
     if(conflictNote) h+=`<div class="warn">${esc(conflictNote)}</div>`;
     h+=`<div class="sect">Override</div><div class="overridebar">`+
       Object.keys(TYPES).map(k=>`<div class="ovr ${k===t?"sel":""}" style="${k===t?`background:${TYPES[k].hex}`:""}" onclick="overrideType('${k}')">${k[0].toUpperCase()+k.slice(1)}</div>`).join("")+
-      `</div><div class="small" style="margin-top:6px">Your judgment is final. Biometrics and formulas are starting points, not verdicts.</div></div>`;
+      `</div>`;
+    if(t!=="green"){
+      h+=`<div class="sect">Flavor — what kind of hard day (optional)</div><div class="overridebar">`+
+        Object.keys(FLAVORS).map(k=>`<div class="ovr ${today.flavor===k?"sel":""}" style="${today.flavor===k?"background:var(--accent)":""}" onclick="setFlavor('${k}')">${k}</div>`).join("")+
+        `</div>`;
+    }
+    h+=`<button class="bigbtn ghost" onclick="copySyncLine(this)">Copy sync line for Claude</button>
+      <div class="small" style="margin-top:6px">Paste it in the 📥 inbox on your NLS Review Hub page in Notion — the morning briefing takes it from there. Your judgment is final; data is a starting point, not a verdict.</div></div>`;
     box.innerHTML=h;
   } else {
     check.style.display="block";
@@ -308,7 +327,7 @@ function render(conflictNote){
     const e=entries.find(x=>x.date===ds);
     const div=document.createElement("div"); div.className="day";
     div.textContent=d.getDate();
-    if(e){const t=e.override||e.dayType; div.style.background=TYPES[t].hex; div.style.color="#14161a"; div.style.fontWeight="700";}
+    if(e){const t=norm(e.override||e.dayType); div.style.background=TYPES[t].hex; div.style.color="#14161a"; div.style.fontWeight="700";}
     strip.appendChild(div);
   }
 
@@ -318,25 +337,78 @@ function render(conflictNote){
   for(let i=0;;i++){
     const d=new Date(); d.setDate(d.getDate()-i);
     const e=entries.find(x=>x.date===todayStr(d));
-    if(e && LOW.includes(e.override||e.dayType)) streak++;
+    if(e && LOW.includes(norm(e.override||e.dayType))) streak++;
     else if(i===0){continue;} else break;
     if(i>30)break;
   }
-  if(streak>=3){
-    pb.innerHTML=`<div class="warn"><b>${streak} low-capacity days in a row.</b> This is the recovery-debt pattern — “feels fine until it collapses.” Consider treating today one level more constrained, and protecting rest before it's forced.</div>`;
+  if(streak>=2){
+    pb.innerHTML=`<div class="warn"><b>${streak} Red days in a row.</b> This is the recovery-debt pattern — “feels fine until it collapses.” Protect rest before it's forced.</div>`;
   } else {
     const last7=[];
-    for(let i=0;i<7;i++){const d=new Date();d.setDate(d.getDate()-i);const e=entries.find(x=>x.date===todayStr(d));if(e)last7.push(e.override||e.dayType);}
-    const lows=last7.filter(t=>LOW.includes(t)).length;
-    if(lows>=4) pb.innerHTML=`<div class="warn"><b>${lows} of the last 7 days were low-capacity.</b> Possible accumulating debt — the manual suggests protecting sleep and dropping optional commitments this week.</div>`;
+    for(let i=0;i<7;i++){const d=new Date();d.setDate(d.getDate()-i);const e=entries.find(x=>x.date===todayStr(d));if(e)last7.push(norm(e.override||e.dayType));}
+    const lows=last7.filter(t=>t==="red").length;
+    if(lows>=3) pb.innerHTML=`<div class="warn"><b>${lows} of the last 7 days were Red.</b> Possible accumulating debt — the manual suggests protecting sleep and dropping optional commitments this week.</div>`;
   }
 
   renderDrain();
   renderFitbitBanner();
 }
 
-/* ---------- sensory reset ---------- */
-function openReset(){document.getElementById("resetModal").classList.add("open");}
+/* ---------- sync line for Claude ---------- */
+const NUM2LABEL={
+  energy:["Low","Medium","High"], pain:["Low","Moderate","High"], sensory:["Low","Medium","High"],
+  emotion:["Regulated","Strained","Overwhelmed"], ef:["Good","Fragmented","Minimal"]
+};
+function fmtSleep(f){
+  if(!f||f.sleepMins==null)return null;
+  return Math.floor(f.sleepMins/60)+"h"+String(f.sleepMins%60).padStart(2,"0")+(f.efficiency?"/"+f.efficiency+"%":"");
+}
+function buildSyncLine(){
+  const e=S.entries.find(x=>x.date===todayStr());
+  if(!e)return null;
+  const f=(S.fit.last&&S.fit.last.date===todayStr())?S.fit.last:null;
+  const parts=["NLS-SYNC","date="+e.date,"time="+e.time];
+  for(const k of FIELDS)parts.push(k+"="+NUM2LABEL[k][e.values[k]]);
+  parts.push("daytype="+norm(e.override||e.dayType));
+  parts.push("flavor="+(e.flavor||"none"));
+  parts.push("computed="+norm(e.dayType));
+  parts.push("override="+(e.override?"yes":"no"));
+  parts.push("fitbit="+(e.fitbit?"yes":"no"));
+  parts.push("recheck="+(e.recheck?"yes":"no"));
+  if(f&&f.rhr)parts.push("rhr="+Math.round(f.rhr));
+  const sl=fmtSleep(f); if(sl)parts.push("sleep="+sl);
+  if(f&&f.sleepDebtH!=null)parts.push("sleepdebt="+f.sleepDebtH.toFixed(1)+"h");
+  // yesterday's final drain (for the calibration table)
+  const y=todayStr(new Date(Date.now()-864e5));
+  const L=D.log;
+  if(L[y]&&L[y].pts!=null){
+    parts.push("ydate="+y,"ydrain="+L[y].pts);
+    if(L[y].type)parts.push("ytype="+norm(L[y].type)+(L[y].flavor?"+"+L[y].flavor:""));
+    if(L[y].rhr)parts.push("yrhr="+L[y].rhr);
+    if(L[y].sleep)parts.push("ysleep="+L[y].sleep);
+    if(L[y].lastSync)parts.push("ysynced="+L[y].lastSync);
+  }
+  const intra=I.d;
+  if(intra.date===todayStr()){
+    const sp=drainSpent(intra);
+    if(sp)parts.push("draintoday="+sp.pts+"@"+new Date(intra.synced||Date.now()).toTimeString().slice(0,5));
+  }
+  return parts.join(" ");
+}
+function copySyncLine(btn){
+  const line=buildSyncLine();
+  if(!line){alert("Save a check first.");return;}
+  const done=()=>{if(btn){btn.textContent="Copied — paste in Review Hub 📥";setTimeout(()=>{btn.textContent="Copy sync line for Claude";},2500);}};
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(line).then(done).catch(()=>{fallbackCopy(line);done();});
+  }else{fallbackCopy(line);done();}
+}
+function fallbackCopy(text){
+  const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{document.execCommand("copy");}catch(e){prompt("Copy this:",text);}
+  document.body.removeChild(ta);
+}
 
 /* ============ FITBIT via GOOGLE HEALTH API ============
    The legacy Fitbit Web API is deprecated Sept 2026, so this app
@@ -516,14 +588,18 @@ function renderFitbitBanner(){
    (verified against the live API, Jul 2026).
    Each minute above resting HR drains a budget sized by today's Day Type:
    +12–24 bpm = 1 pt/min · +25–39 = 2 · +40 or more = 4.
-   Budgets are defaults — calibrate in Settings after a few days of data. */
+   Budgets seeded from the Aug 2026 calibration log — refine in Settings. */
 const I={
   get d(){return JSON.parse(localStorage.getItem("nls_intra")||"{}");},
   set d(v){localStorage.setItem("nls_intra",JSON.stringify(v));}
 };
+const D={
+  get log(){return JSON.parse(localStorage.getItem("nls_drainlog")||"{}");},
+  set log(v){localStorage.setItem("nls_drainlog",JSON.stringify(v));}
+};
 function drainBudget(){
   const today=S.entries.find(e=>e.date===todayStr());
-  const t=today?(today.override||today.dayType):null;
+  const t=today?norm(today.override||today.dayType):null;
   const b=Object.assign({},DRAIN_BUDGETS,S.cfg.budgets||{});
   return {type:t,budget:b[t||"yellow"],assumed:!t};
 }
@@ -547,6 +623,20 @@ function drainSpent(intra){
     if(p>(hours[h]||0))hours[h]=p;
   }
   return {pts,rhr,hours};
+}
+function drainLogUpdate(intra){
+  const sp=drainSpent(intra);
+  if(!sp||!intra.date)return;
+  const L=D.log;
+  const e=S.entries.find(x=>x.date===intra.date);
+  L[intra.date]={pts:sp.pts, rhr:Math.round(sp.rhr),
+    type:e?norm(e.override||e.dayType):null, flavor:e?(e.flavor||null):null,
+    sleep:(S.fit.last&&S.fit.last.date===intra.date)?fmtSleep(S.fit.last):(L[intra.date]&&L[intra.date].sleep)||null,
+    lastSync:new Date(intra.synced||Date.now()).toTimeString().slice(0,5)};
+  // prune to last 30 days
+  const cutoff=todayStr(new Date(Date.now()-30*864e5));
+  for(const k in L){if(k<cutoff)delete L[k];}
+  D.log=L;
 }
 async function drainSync(auto){
   const fit=S.fit;
@@ -591,6 +681,7 @@ async function drainSync(auto){
     intra.synced=Date.now();
     intra.partial=pages>=30;
     I.d=intra;
+    drainLogUpdate(intra);
   }catch(e){
     renderDrain(null,String(e.message||e));
     return;
@@ -646,17 +737,17 @@ function openSettings(){
   </div>
   <div class="fitline">${fit.granted?"Authorized. Sessions last ~1 hour — the app asks Google again each morning (usually a one-tap popup).":"Not connected — app works fully in manual mode."}</div>
   <div class="set-label">“Minimum that counts” — per day type (edit freely)</div>`;
-  for(const k of ["yellow","blue","gray","red"]){
+  for(const k of ["yellow","red"]){
     h+=`<div class="set-label" style="margin:8px 0 2px; color:${TYPES[k].hex}">${k[0].toUpperCase()+k.slice(1)}</div>
     <input type="text" data-floor="${k}" value="${esc(floors[k]||TYPES[k].floorDefault)}">`;
   }
   h+='<div class="set-label" style="margin-top:16px">Day budget (drain points) — per day type</div><div class="row" style="gap:6px">';
-  for(const k of ["green","yellow","blue","gray","red"]){
+  for(const k of ["green","yellow","red"]){
     h+='<div style="flex:1"><div class="set-label" style="margin:6px 0 2px; color:'+TYPES[k].hex+'">'+k[0].toUpperCase()+k.slice(1)+'</div><input type="text" inputmode="numeric" data-budget="'+k+'" value="'+((cfg.budgets&&cfg.budgets[k])||DRAIN_BUDGETS[k])+'"></div>';
   }
-  h+='</div><div class="small">Drain: each minute 12+ bpm over resting = 1 pt · 25+ = 2 · 40+ = 4. Defaults are guesses — after a few days, set each budget to what a sustainable day of that color actually costs.</div>';
+  h+='</div><div class="small">Drain: each minute 12+ bpm over resting = 1 pt · 25+ = 2 · 40+ = 4. Defaults are seeded from your Aug 2026 calibration log (Green 500 · Yellow 900 · Red 600) — the Sunday review suggests refinements as sustainable-day data grows.</div>';
   h+=`<div class="set-label">Custom protocol lines (optional, one per line — replaces defaults)</div>`;
-  for(const k of ["gray","red"]){
+  for(const k of ["yellow","red"]){
     h+=`<div class="set-label" style="margin:8px 0 2px; color:${TYPES[k].hex}">${k[0].toUpperCase()+k.slice(1)}</div>
     <textarea data-prot="${k}">${esc(prots[k]||"")}</textarea>`;
   }
@@ -671,7 +762,7 @@ function openSettings(){
   <div class="small" style="margin-top:14px">
   <b>Setup guide (Google Health API):</b> 1) console.cloud.google.com → new project → enable “Google Health API”. 2) OAuth consent screen → External → Testing → add your own Gmail as a test user. 3) Credentials → Create OAuth client ID → Web application → add this page's origin (https://tenelka3001.github.io) under Authorized JavaScript origins. 4) Paste the Client ID above, Save, Connect. Full steps in the setup doc.<br><br>
   Note: the legacy dev.fitbit.com API shuts down Sept 2026 — this app already uses its replacement. Sleep Score and Stress Score aren't exposed by the API; the app uses raw sleep stages, HRV, RHR and skin temp, which is what your manual maps to the fields anyway.<br><br>
-  <b>Model note:</b> Day Type logic is derived from NLS Manual §1.3 (§1.4 was never written). Interaction effects (§1.2) are honored via the conflict rule and pattern warnings.</div>`;
+  <b>Model note:</b> 3-level Day Type scale (Green / Yellow / Red + flavor) per Manual §1.3 as revised 2026-08-09. Old Blue and Gray days were auto-migrated (Blue → Yellow+fog, Gray → Red+fog); your history and settings are preserved.</div>`;
   document.getElementById("settingsSheet").innerHTML=h;
   document.getElementById("settingsModal").classList.add("open");
 }
@@ -684,14 +775,14 @@ function saveSettings(){
   S.cfg=c; document.getElementById("settingsModal").classList.remove("open"); render();
 }
 function exportData(){
-  const blob=new Blob([JSON.stringify({entries:S.entries,cfg:S.cfg},null,1)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({entries:S.entries,cfg:S.cfg,drainlog:D.log},null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download="nls-capacity-backup-"+todayStr()+".json"; a.click();
 }
 function importData(){
   const inp=document.createElement("input"); inp.type="file"; inp.accept=".json";
   inp.onchange=()=>{const r=new FileReader(); r.onload=()=>{try{
-    const d=JSON.parse(r.result); if(d.entries)S.entries=d.entries; if(d.cfg)S.cfg=d.cfg;
+    const d=JSON.parse(r.result); if(d.entries)S.entries=d.entries; if(d.cfg)S.cfg=d.cfg; if(d.drainlog)D.log=d.drainlog;
     document.getElementById("settingsModal").classList.remove("open"); render(); alert("Imported.");
   }catch(e){alert("Couldn't read that file.");}}; r.readAsText(inp.files[0]);};
   inp.click();
