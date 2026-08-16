@@ -797,5 +797,106 @@ function wipeToday(){
 render();
 if(S.fit.granted&&S.fit.token&&Date.now()<(S.fit.expires||0)&&(!I.d.synced||Date.now()-I.d.synced>15*60*1000))drainSync(true);
 </script>
+<script>
+(function(){
+  function budgetFor(t){
+    var c = (S.cfg && S.cfg.budgets) || {};
+    return c[t] || DRAIN_BUDGETS[t] || null;
+  }
+
+  function pretty(iso){
+    var p = iso.split("-").map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    return d.toLocaleDateString("en-US", {weekday:"short", timeZone:"UTC"}) + " " +
+           d.toLocaleDateString("en-US", {month:"short",   timeZone:"UTC"}) + " " + p[2];
+  }
+
+  /* Builds both rows from yesterday's closed-out drain entry.
+     Pass a log object to test; omit it to use the app's own D.log. */
+  window.buildNotionRows = function(logOverride){
+    var L = logOverride || D.log || {};
+    var y = todayStr(new Date(Date.now() - 864e5));
+    var r = L[y];
+    if(!r || r.pts == null) return null;
+
+    var base   = r.type ? norm(r.type) : null;
+    var shown  = base ? (base + (r.flavor ? "+" + r.flavor : "")) : "day type not recorded";
+    var budget = base ? budgetFor(base) : null;
+    var rhr    = r.rhr   || "—";
+    var sleep  = r.sleep || "—";
+    var drain  = r.pts;
+
+    var checkin = "- [ ] **" + pretty(y) + "** — " + shown +
+                  " · drain " + drain + " · RHR " + rhr + " · sleep " + sleep +
+                  " — tap if sustainable. Flavor: " + (r.flavor || "");
+
+    var pct   = budget ? Math.round(100 * drain / budget) + "%" : "";
+    /* Tab-separated so it pastes into the Notion table as a real row:
+       Date · Day-type · Drain · Budget · % · RHR · Sleep · Sustainable(blank) */
+    var calib = [y, (base ? shown : ""), drain, (budget || ""), pct, rhr, sleep, ""].join("\t");
+
+    return { date:y, checkin:checkin, calib:calib };
+  };
+
+  function copy(text, btn, label){
+    var done = function(){
+      btn.textContent = "Copied ✓";
+      setTimeout(function(){ btn.textContent = label; }, 2000);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){});
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); ta.remove(); done();
+    }
+  }
+
+  function mount(){
+    if(document.getElementById("notionRowsCard")) return;
+    var host = document.querySelector(".wrap");
+    if(!host) return;
+
+    var card = document.createElement("div");
+    card.className = "card";
+    card.id = "notionRowsCard";
+    card.innerHTML =
+      '<div class="label" style="margin-top:0"><span>Yesterday → Notion</span></div>' +
+      '<div class="small" id="nrStatus">—</div>' +
+      '<div class="row">' +
+        '<button class="bigbtn ghost" id="nrA">Copy check-in row</button>' +
+        '<button class="bigbtn ghost" id="nrB">Copy table row</button>' +
+      '</div>';
+
+    /* sit just under the 14-day history strip; fall back to the page end */
+    var strip  = document.getElementById("strip");
+    var anchor = strip ? strip.closest(".card") : null;
+    if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(card, anchor.nextSibling);
+    else host.appendChild(card);
+
+    function refresh(){
+      var r  = window.buildNotionRows();
+      var st = document.getElementById("nrStatus");
+      var a  = document.getElementById("nrA");
+      var b  = document.getElementById("nrB");
+      if(!r){
+        st.textContent = "No finished drain total for yesterday yet — nothing to copy.";
+        a.disabled = true; b.disabled = true;
+        return;
+      }
+      st.textContent = pretty(r.date) + " · ready to paste into the Review Hub and the calibration table.";
+      a.disabled = false; b.disabled = false;
+      a.onclick = function(){ copy(r.checkin, a, "Copy check-in row"); };
+      b.onclick = function(){ copy(r.calib,   b, "Copy table row");   };
+    }
+
+    refresh();
+    window.__nrRefresh = refresh;   /* call after a sync if you want it re-read */
+  }
+
+  if(document.readyState !== "loading") mount();
+  else document.addEventListener("DOMContentLoaded", mount);
+})();
+</script>
 </body>
 </html>
